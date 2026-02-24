@@ -1,0 +1,5 @@
+/* 모바일 툴바 제거 */
+body.mobile-toolbar-off .mobile-toolbar,
+body.mobile-toolbar-off .mobile-toolbar-container {
+    display: none !important;
+}

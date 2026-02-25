@@ -1,9 +1,9 @@
 {
-	"id": "RegExp changer",
-	"name": "RegExp Changer",
+	"id": "open-certain-md",
+	"name": "open md",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "정규표현식을 사용하여 텍스트를 변경하는 플러그인입니다.",
+	"description": "open certain md file",
 	"author": "ujupatipanno",
 	"authorUrl": "https://github.com/ujupatipanno",
 	"fundingUrl": "https://buymeacoffee.com/ujupatipanno",

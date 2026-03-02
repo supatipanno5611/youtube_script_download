@@ -1,3 +1,4 @@
+```ts
 import { Notice, Plugin, TFile, moment } from 'obsidian';
 
 // 1. JSON 파일로 관리할 설정 인터페이스
@@ -88,3 +89,4 @@ export default class DateUpdatePlugin extends Plugin {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }
 }
+```

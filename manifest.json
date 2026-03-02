@@ -1,9 +1,9 @@
 {
-	"id": "open-certain-md",
-	"name": "open md",
+	"id": "update-modified-date",
+	"name": "update modified date",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "open certain md file",
+	"description": "update modified date in frontmatter",
 	"author": "ujupatipanno",
 	"authorUrl": "https://github.com/ujupatipanno",
 	"fundingUrl": "https://buymeacoffee.com/ujupatipanno",

@@ -1,3 +1,4 @@
+```ts
 import { Editor, MarkdownView, Plugin } from "obsidian";
 
 export default class AddTrailingSpacesPlugin extends Plugin {
@@ -119,3 +120,4 @@ function isPlainParagraph(line: string): boolean {
 
 	return true;
 }
+```

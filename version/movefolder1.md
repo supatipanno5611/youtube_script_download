@@ -1,3 +1,4 @@
+```ts
 import { App, Notice, Plugin, TFile } from "obsidian";
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -10,14 +11,14 @@ const FOLDER_2 = "private";
 export default class MoveFilePlugin extends Plugin {
 	async onload() {
 		this.addCommand({
-			id: "move-to-folder-1",
-			name: "현재 파일을 폴더 1로 이동",
+			id: "move-to-content",
+			name: "Move current file to content folder",
 			callback: () => this.moveActiveFileTo(FOLDER_1),
 		});
 
 		this.addCommand({
-			id: "move-to-folder-2",
-			name: "현재 파일을 폴더 2로 이동",
+			id: "move-to-private",
+			name: "Move current file to private folder",
 			callback: () => this.moveActiveFileTo(FOLDER_2),
 		});
 	}
@@ -72,3 +73,4 @@ export default class MoveFilePlugin extends Plugin {
 		await this.app.fileManager.renameFile(file, newPath);
 	}
 }
+```

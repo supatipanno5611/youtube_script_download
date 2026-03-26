@@ -1,3 +1,4 @@
+```ts
 import { Plugin, Notice } from 'obsidian';
 
 export default class CheckScreenPlugin extends Plugin {
@@ -9,3 +10,4 @@ export default class CheckScreenPlugin extends Plugin {
         });
     }
 }
+```

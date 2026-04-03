@@ -1,3 +1,4 @@
+```ts
 import { Plugin, Editor } from 'obsidian';
 
 export default class LineCursorPlugin extends Plugin {
@@ -25,3 +26,4 @@ export default class LineCursorPlugin extends Plugin {
 		editor.setCursor({ line: cursor.line, ch: editor.getLine(cursor.line).length });
 	}
 }
+```

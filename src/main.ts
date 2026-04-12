@@ -31,6 +31,9 @@ export const CARD_SIZE = {
 	XS: 0
 } as const;
 
+export const CARD_GAP = 12;
+export const CARD_WIDTH = 220; // 열 너비 (px) — 조정 가능
+
 export const DEFAULT_HIDDEN_BASE_PATTERNS = [
 	'^\\d{4}년$',
 	'^\\d{1,2}월$',
@@ -259,6 +262,7 @@ export class GridView extends ItemView {
 	private filterBadgeEl!: HTMLElement;
 	private cardCountEl!: HTMLElement;
 	private selectedBasesContainerEl!: HTMLElement;
+	private resizeObserver: ResizeObserver | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: GridViewPlugin) {
 		super(leaf);
@@ -637,6 +641,51 @@ export class GridView extends ItemView {
 		this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
 			this.updateActiveCardHighlight();
 		}));
+
+		// 창 크기 변경 시 masonry 재배치
+		this.resizeObserver = new ResizeObserver(() => {
+			if (this.refreshTimeoutId !== null) window.clearTimeout(this.refreshTimeoutId);
+			this.refreshTimeoutId = window.setTimeout(() => {
+				this.gridContainer?.querySelectorAll('.mini-notes-grid-section').forEach(section => {
+					this.layoutSection(section as HTMLElement);
+				});
+				this.refreshTimeoutId = null;
+			}, 100);
+		});
+		this.resizeObserver.observe(this.gridContainer);
+	}
+
+	private layoutSection(section: HTMLElement) {
+		const containerWidth = section.clientWidth;
+		const colCount = Math.max(1, Math.floor((containerWidth + CARD_GAP) / (CARD_WIDTH + CARD_GAP)));
+		const colWidth = Math.floor((containerWidth - (colCount - 1) * CARD_GAP) / colCount);
+		const colHeights = new Array(colCount).fill(0);
+
+		const cards = Array.from(section.querySelectorAll('.dashboard-card')) as HTMLElement[];
+		cards.forEach(card => {
+			// 너비 고정 후 높이 측정
+			card.style.width = `${colWidth}px`;
+			card.style.position = 'absolute';
+
+			const shortestCol = colHeights.indexOf(Math.min(...colHeights));
+			const x = shortestCol * (colWidth + CARD_GAP);
+			const y = colHeights[shortestCol]!;
+
+			card.style.left = `${x}px`;
+			card.style.top = `${y}px`;
+
+			colHeights[shortestCol] = y + card.offsetHeight + CARD_GAP;
+		});
+
+		section.style.height = `${Math.max(...colHeights)}px`;
+
+		// 배치 완료 후 fade-in 시작
+		requestAnimationFrame(() => {
+			cards.forEach(card => {
+				card.style.opacity = '1';
+				card.style.transform = 'translateY(0)';
+			});
+		});
 	}
 
 	private updateActiveCardHighlight() {
@@ -753,24 +802,22 @@ export class GridView extends ItemView {
 
 		if (needsSections) {
 			const pinnedGrid = this.gridContainer.createDiv({ cls: 'mini-notes-grid-section' });
-			for (const file of pinnedFiles) {
-				const card = await this.createCard(file, globalIndex++);
-				if (card) pinnedGrid.appendChild(card);
-			}
+			const pinnedCards = await Promise.all(pinnedFiles.map(f => this.createCard(f, globalIndex++)));
+			pinnedCards.forEach(card => { if (card) pinnedGrid.appendChild(card); });
+			this.layoutSection(pinnedGrid);
+
 			this.gridContainer.createDiv({ cls: 'section-separator' });
 
 			const notesGrid = this.gridContainer.createDiv({ cls: 'mini-notes-grid-section' });
 			const remainingLimit = this.plugin.data.maxNotes - pinnedFiles.length;
-			for (const file of unpinnedFiles.slice(0, remainingLimit)) {
-				const card = await this.createCard(file, globalIndex++);
-				if (card) notesGrid.appendChild(card);
-			}
+			const unpinnedCards = await Promise.all(unpinnedFiles.slice(0, remainingLimit).map(f => this.createCard(f, globalIndex++)));
+			unpinnedCards.forEach(card => { if (card) notesGrid.appendChild(card); });
+			this.layoutSection(notesGrid);
 		} else {
 			const singleGrid = this.gridContainer.createDiv({ cls: 'mini-notes-grid-section' });
-			for (const file of finalFiles) {
-				const card = await this.createCard(file, globalIndex++);
-				if (card) singleGrid.appendChild(card);
-			}
+			const cards = await Promise.all(finalFiles.map(f => this.createCard(f, globalIndex++)));
+			cards.forEach(card => { if (card) singleGrid.appendChild(card); });
+			this.layoutSection(singleGrid);
 		}
 
 		this.updateActiveCardHighlight();
@@ -784,11 +831,12 @@ export class GridView extends ItemView {
 			card.setAttribute('data-index', index.toString());
 			card.setAttribute('draggable', 'true');
 
-			// staggered fade + slide-up
+			// staggered fade + slide-up — layoutSection 이후 triggerFadeIn()으로 시작
 			const delay = Math.min(index * 25, 300);
 			card.style.opacity = '0';
 			card.style.transform = 'translateY(8px)';
 			card.style.transition = `opacity 0.2s ease-out ${delay}ms, transform 0.2s ease-out ${delay}ms`;
+			(card as any)._fadeDelay = delay;
 
 			const content = await this.app.vault.cachedRead(file);
 			const cleanContent = stripMarkdown(content);
@@ -927,11 +975,6 @@ export class GridView extends ItemView {
 			card.addEventListener('dragleave', (e) => this.handleDragLeave(e, card));
 			card.addEventListener('drop', (e) => void this.handleDrop(e, card));
 
-			requestAnimationFrame(() => {
-				card.style.opacity = '1';
-				card.style.transform = 'translateY(0)';
-			});
-
 			return card;
 		} catch (error) {
 			return null;
@@ -992,6 +1035,7 @@ export class GridView extends ItemView {
 	}
 
 	async onClose() {
+		this.resizeObserver?.disconnect();
 		this.contentEl.empty();
 	}
 }

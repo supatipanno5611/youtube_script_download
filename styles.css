@@ -2,7 +2,6 @@
    Theme-aware Pastel Colors
    ============================================ */
 
-/* Light theme pastel colors (default) */
 :root {
     --pastel-pink: #FFE5E5;
     --pastel-peach: #FFE5CC;
@@ -14,7 +13,6 @@
     --pastel-gray: #E5E5E5;
 }
 
-/* Dark theme colors - inspired by Google Keep's vibrant note design */
 .theme-dark {
     --pastel-pink: #77172E;
     --pastel-peach: #692B17;
@@ -26,7 +24,10 @@
     --pastel-gray: #3C3F43;
 }
 
-/* Main container */
+/* ============================================
+   Main Container
+   ============================================ */
+
 .visual-dashboard-container {
     height: 100%;
     overflow-y: auto;
@@ -35,7 +36,6 @@
     background: var(--background-primary);
 }
 
-/* Scrollbar */
 .visual-dashboard-container::-webkit-scrollbar {
     width: 5px;
 }
@@ -62,7 +62,6 @@
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
-/* Left & Right Control Groups */
 .header-controls-left,
 .header-controls {
     display: flex;
@@ -70,7 +69,6 @@
     gap: 4px;
 }
 
-/* Tag Filter Wrapper (Used for positioning) */
 .tag-filter-wrapper {
     position: relative;
     display: flex;
@@ -78,10 +76,20 @@
 }
 
 /* ============================================
-   Dropdown Menus (Common & Custom)
+   Card Count Label
    ============================================ */
 
-/* 공통 드롭다운 스타일 */
+.card-count-label {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+/* ============================================
+   Dropdown Menus
+   ============================================ */
+
 .tag-dropdown-menu,
 .sort-dropdown-menu,
 .logic-dropdown-menu {
@@ -104,7 +112,6 @@
     display: block;
 }
 
-/* 스크롤바 스타일 */
 .tag-dropdown-menu::-webkit-scrollbar,
 .sort-dropdown-menu::-webkit-scrollbar,
 .logic-dropdown-menu::-webkit-scrollbar {
@@ -118,28 +125,24 @@
     border-radius: 3px;
 }
 
-/* 1. 태그 검색/결과 드롭다운 (오른쪽 정렬) */
 .tag-dropdown-menu {
     right: 0;
     min-width: 180px;
     max-width: 240px;
 }
 
-/* 2. 왼쪽 정렬 메뉴 (왼쪽 정렬) */
 .sort-dropdown-menu {
     left: 0;
     right: auto;
     min-width: 160px;
 }
 
-/* 3. 연산 로직 메뉴 (오른쪽 정렬) */
 .logic-dropdown-menu {
     right: 0;
     left: auto;
     min-width: 180px;
 }
 
-/* Dropdown Items */
 .tag-dropdown-item {
     padding: 6px 10px;
     cursor: pointer;
@@ -153,7 +156,11 @@
     background: var(--background-modifier-hover);
 }
 
-/* Pills (Used in Dropdowns & Header) */
+.tag-dropdown-item.keyboard-active {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
 .tag-dropdown-item.tag-pill {
     display: inline-flex;
     align-items: center;
@@ -176,7 +183,6 @@
    Filter Controls
    ============================================ */
 
-/* Unified Filter Icons (Funnel, Pin) */
 .filter-icon {
     display: flex;
     align-items: center;
@@ -209,7 +215,6 @@
     pointer-events: none;
 }
 
-/* Filter Reset Button */
 .filter-reset-btn {
     display: flex;
     align-items: center;
@@ -234,8 +239,38 @@
 }
 
 /* ============================================
+   Filter Badge
+   ============================================ */
+
+.filter-icon-with-badge {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 14px;
+    height: 14px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-radius: 7px;
+    font-size: 9px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 3px;
+    pointer-events: none;
+}
+
+/* ============================================
    Section Separator
    ============================================ */
+
 .section-separator {
     width: 100%;
     height: 1px;
@@ -244,42 +279,34 @@
 }
 
 /* ============================================
-   Grid Layout - CSS Columns
+   Grid Layout — JS Masonry
    ============================================ */
+
 .mini-notes-grid {
     display: flex;
     flex-direction: column;
 }
 
 .mini-notes-grid-section {
-    column-count: 5;
-    column-gap: 12px;
+    position: relative;
     width: 100%;
 }
-
-@media (min-width: 1400px) { .mini-notes-grid-section { column-count: 6; } }
-@media (min-width: 1100px) and (max-width: 1399px) { .mini-notes-grid-section { column-count: 5; } }
-@media (min-width: 800px) and (max-width: 1099px) { .mini-notes-grid-section { column-count: 4; } }
-@media (min-width: 500px) and (max-width: 799px) { .mini-notes-grid-section { column-count: 3; } }
-@media (max-width: 499px) { .mini-notes-grid-section { column-count: 2; } }
 
 /* ============================================
    Cards
    ============================================ */
 
 .dashboard-card {
-    position: relative;
+    position: absolute;
     background: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
     border-radius: 3px;
     padding: 10px 12px;
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
     transition: border-color 0.15s, transform 0.15s, opacity 0.15s;
-    display: inline-block;
-    width: 100%;
-    break-inside: avoid;
-    margin-bottom: 12px;
-    max-height: 600px;
+    box-sizing: border-box;
     overflow: hidden;
 }
 
@@ -287,7 +314,6 @@
     border-color: var(--text-muted);
 }
 
-/* Drag and Drop States */
 .dashboard-card.dragging {
     opacity: 0.5;
     cursor: pointer;
@@ -300,10 +326,15 @@
     background: rgba(var(--interactive-accent-rgb), 0.05);
 }
 
-/* Pinned card styling */
 .dashboard-card.card-pinned {
     border-color: var(--masonry-theme-color, var(--interactive-accent));
     border-width: 1px;
+}
+
+.dashboard-card.card-active {
+    border-color: var(--masonry-theme-color, var(--interactive-accent));
+    border-width: 2px;
+    box-shadow: 0 0 0 1px var(--masonry-theme-color, var(--interactive-accent));
 }
 
 /* ============================================
@@ -337,7 +368,6 @@
 .card-pin-btn.pinned svg { fill: var(--masonry-theme-color, var(--interactive-accent)); }
 .card-pin-btn svg { width: 14px; height: 14px; }
 
-/* Color Button */
 .card-color-btn {
     position: absolute;
     top: 6px;
@@ -358,7 +388,6 @@
 .card-color-btn:hover { color: var(--text-normal); }
 .card-color-btn svg { width: 14px; height: 14px; }
 
-/* Color Dropdown */
 .card-color-dropdown {
     position: absolute;
     top: 36px;
@@ -403,6 +432,7 @@
     height: 1px;
     background: var(--text-muted);
 }
+
 .card-color-dropdown .color-circle-clear::before { transform: translate(-50%, -50%) rotate(45deg); }
 .card-color-dropdown .color-circle-clear::after { transform: translate(-50%, -50%) rotate(-45deg); }
 
@@ -431,7 +461,6 @@
     -webkit-box-orient: vertical;
 }
 
-/* Dark theme specific text adjustment for colored cards */
 .theme-dark .dashboard-card[style*="background-color"] .card-title { color: #E8EAED; }
 .theme-dark .dashboard-card[style*="background-color"] .card-preview { color: #E8EAED; opacity: 0.9; }
 .theme-dark .dashboard-card[style*="background-color"] .card-date { color: rgba(232, 234, 237, 0.7); }
@@ -487,15 +516,25 @@
 }
 
 .card-tag {
-    font-size: 10px;
+    cursor: pointer;
+    font-size: 11px;
     color: var(--masonry-theme-color, var(--interactive-accent));
     background: rgba(var(--interactive-accent-rgb), 0.1);
-    padding: 2px 6px;
+    padding: 3px 8px;
     border-radius: 7px;
     white-space: nowrap;
     max-width: 70px;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-height: 22px;
+    display: inline-flex;
+    align-items: center;
+    transition: background-color 0.1s, color 0.1s;
+}
+
+.card-tag:hover {
+    background: rgba(var(--interactive-accent-rgb), 0.2);
+    color: var(--interactive-accent);
 }
 
 .card-tag-more {
@@ -537,99 +576,9 @@
 }
 
 /* ============================================
-   Focus States
+   Hidden Pattern Modal
    ============================================ */
 
-.dashboard-card:focus-visible {
-    outline: 2px solid var(--masonry-theme-color, var(--interactive-accent));
-    outline-offset: 1px;
-}
-
-.card-pin-btn:focus-visible {
-    outline: 2px solid var(--masonry-theme-color, var(--interactive-accent));
-    opacity: 1;
-}
-
-/* ============================================
-   styles.css에 추가할 CSS
-   ============================================ */
-
-/* ============================================
-   카드 수 레이블
-   ============================================ */
-.card-count-label {
-    font-size: 12px;
-    color: var(--text-faint);
-    margin-left: 8px;
-    white-space: nowrap;
-}
-
-/* ============================================
-   필터 아이콘 + 뱃지 컨테이너
-   ============================================ */
-.filter-icon-with-badge {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.filter-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    min-width: 14px;
-    height: 14px;
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
-    border-radius: 7px;
-    font-size: 9px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 3px;
-    pointer-events: none;
-}
-
-/* ============================================
-   드롭다운 키보드 활성 항목
-   ============================================ */
-.tag-dropdown-item.keyboard-active {
-    background: var(--background-modifier-hover);
-    color: var(--text-normal);
-}
-
-/* ============================================
-   카드 배지 — 터치 친화적, 클릭 가능
-   ============================================ */
-.card-tag {
-    cursor: pointer;
-    padding: 3px 8px;          /* 기존 2px 6px에서 확대 */
-    font-size: 11px;            /* 기존 10px에서 확대 */
-    min-height: 22px;
-    display: inline-flex;
-    align-items: center;
-    transition: background-color 0.1s, color 0.1s;
-}
-
-.card-tag:hover {
-    background: rgba(var(--interactive-accent-rgb), 0.2);
-    color: var(--interactive-accent);
-}
-
-/* ============================================
-   열린 파일 하이라이트
-   ============================================ */
-.dashboard-card.card-active {
-    border-color: var(--masonry-theme-color, var(--interactive-accent));
-    border-width: 2px;
-    box-shadow: 0 0 0 1px var(--masonry-theme-color, var(--interactive-accent));
-}
-
-/* ============================================
-   숨김 패턴 모달
-   ============================================ */
 .hidden-pattern-list {
     margin-bottom: 16px;
 }
@@ -642,4 +591,18 @@
 .hidden-pattern-list .setting-item-name {
     font-family: var(--font-monospace);
     font-size: 13px;
+}
+
+/* ============================================
+   Focus States
+   ============================================ */
+
+.dashboard-card:focus-visible {
+    outline: 2px solid var(--masonry-theme-color, var(--interactive-accent));
+    outline-offset: 1px;
+}
+
+.card-pin-btn:focus-visible {
+    outline: 2px solid var(--masonry-theme-color, var(--interactive-accent));
+    opacity: 1;
 }

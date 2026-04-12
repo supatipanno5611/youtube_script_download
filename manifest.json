@@ -1,9 +1,9 @@
 {
-	"id": "update-modified-date",
-	"name": "update modified date",
+	"id": "grid-view",
+	"name": "그리드 뷰",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "update modified date in frontmatter",
+	"description": "add grid view",
 	"author": "ujupatipanno",
 	"authorUrl": "https://github.com/ujupatipanno",
 	"fundingUrl": "https://buymeacoffee.com/ujupatipanno",

@@ -1,3 +1,4 @@
+```ts
 import {
 	Plugin,
 	ItemView,
@@ -958,3 +959,4 @@ class FolderSuggestModal extends FuzzySuggestModal<TFolder> {
 		this.onAdd();
 	}
 }
+```

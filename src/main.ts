@@ -31,6 +31,12 @@ export const CARD_SIZE = {
 	XS: 0
 } as const;
 
+export const DEFAULT_HIDDEN_BASE_PATTERNS = [
+	'^\\d{4}년$',
+	'^\\d{1,2}월$',
+	'^\\d{1,2}일$'
+];
+
 export type SortOption = 'mtime-new' | 'mtime-old' | 'ctime-new' | 'ctime-old' | 'random';
 export type FilterLogic = 'OR' | 'AND';
 
@@ -43,6 +49,7 @@ export interface GridData {
 	maxNotes: number;
 	noteColors: Record<string, string>;
 	opengridview: boolean;
+	hiddenBasePatterns: string[];
 }
 
 export const DEFAULT_DATA: GridData = {
@@ -53,7 +60,8 @@ export const DEFAULT_DATA: GridData = {
 	sortOption: 'mtime-new',
 	maxNotes: 150,
 	noteColors: {},
-	opengridview: false
+	opengridview: false,
+	hiddenBasePatterns: [...DEFAULT_HIDDEN_BASE_PATTERNS]
 };
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -65,7 +73,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 };
 
 // ------------------------------------------------------------------
-// 2. UTILS (Date & Markdown)
+// 2. UTILS
 // ------------------------------------------------------------------
 
 function formatDate(timestamp: number): string {
@@ -111,6 +119,16 @@ function getPreviewText(content: string, maxLength: number): string {
 	return text;
 }
 
+function isBaseHidden(base: string, patterns: string[]): boolean {
+	return patterns.some(pattern => {
+		try {
+			return new RegExp(pattern).test(base);
+		} catch {
+			return false;
+		}
+	});
+}
+
 // ------------------------------------------------------------------
 // 3. MAIN PLUGIN CLASS
 // ------------------------------------------------------------------
@@ -136,6 +154,18 @@ export default class GridViewPlugin extends Plugin {
 				name: '그리드 뷰 열기',
 				callback: async () => {
 					await this.activateView();
+				}
+			});
+
+			this.addCommand({
+				id: 'focus-grid-search',
+				name: '그리드 뷰 검색창 포커스',
+				callback: async () => {
+					await this.activateView();
+					const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_GRID);
+					if (leaves.length > 0) {
+						(leaves[0]!.view as GridView).focusSearch();
+					}
 				}
 			});
 
@@ -199,16 +229,11 @@ export default class GridViewPlugin extends Plugin {
 		} else {
 			leaf = workspace.getLeaf('tab');
 			if (leaf) {
-				await leaf.setViewState({
-					type: VIEW_TYPE_GRID,
-					active: true,
-				});
+				await leaf.setViewState({ type: VIEW_TYPE_GRID, active: true });
 			}
 		}
 
-		if (leaf) {
-			await workspace.revealLeaf(leaf);
-		}
+		if (leaf) await workspace.revealLeaf(leaf);
 	}
 
 	onunload() { }
@@ -228,24 +253,24 @@ export class GridView extends ItemView {
 	private filterPinned: 'all' | 'pinned' | 'unpinned' = 'all';
 	private selectedBases: Set<string> = new Set();
 	private filterLogic: FilterLogic = 'OR';
-
 	private allBases: string[] = [];
+
+	private searchInputEl!: HTMLInputElement;
+	private filterBadgeEl!: HTMLElement;
+	private cardCountEl!: HTMLElement;
+	private selectedBasesContainerEl!: HTMLElement;
 
 	constructor(leaf: WorkspaceLeaf, plugin: GridViewPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 	}
 
-	getViewType(): string {
-		return VIEW_TYPE_GRID;
-	}
+	getViewType(): string { return VIEW_TYPE_GRID; }
+	getDisplayText(): string { return '그리드 뷰'; }
+	getIcon(): string { return 'layout-grid'; }
 
-	getDisplayText(): string {
-		return '그리드 뷰';
-	}
-
-	getIcon(): string {
-		return 'layout-grid';
+	focusSearch() {
+		this.searchInputEl?.focus();
 	}
 
 	async onOpen() {
@@ -259,20 +284,20 @@ export class GridView extends ItemView {
 		this.gridContainer.style.setProperty('--masonry-theme-color', 'var(--interactive-accent)');
 
 		await this.renderCards();
-
 		this.setupEventListeners();
+
+		setTimeout(() => this.searchInputEl?.focus(), 50);
 	}
 
 	private renderHeader(container: HTMLElement) {
 		const header = container.createDiv({ cls: 'dashboard-header' });
 
 		// -----------------------------------------------------
-		// [왼쪽] 정렬 드롭다운
+		// [왼쪽] 정렬 드롭다운 + 카드 수
 		// -----------------------------------------------------
 		const leftControls = header.createDiv({ cls: 'header-controls-left' });
 
 		const sortWrapper = leftControls.createDiv({ cls: 'tag-filter-wrapper' });
-
 		const sortBtn = sortWrapper.createDiv({ cls: 'tag-dropdown-item tag-pill' });
 		sortBtn.style.cursor = 'pointer';
 		sortBtn.style.padding = '6px 12px';
@@ -288,7 +313,6 @@ export class GridView extends ItemView {
 		const sortTextSpan = sortBtn.createSpan({ text: SORT_LABELS[this.plugin.data.sortOption] });
 
 		const sortMenu = sortWrapper.createDiv({ cls: 'sort-dropdown-menu' });
-
 		(Object.keys(SORT_LABELS) as SortOption[]).forEach(optionKey => {
 			const item = sortMenu.createDiv({ cls: 'tag-dropdown-item' });
 			item.textContent = SORT_LABELS[optionKey];
@@ -296,12 +320,10 @@ export class GridView extends ItemView {
 				item.style.fontWeight = 'bold';
 				item.style.color = 'var(--interactive-accent)';
 			}
-
 			item.addEventListener('click', async (e) => {
 				e.stopPropagation();
 				this.plugin.data.sortOption = optionKey;
 				await this.plugin.savePluginData();
-
 				sortTextSpan.textContent = SORT_LABELS[optionKey];
 				sortMenu.removeClass('show');
 				void this.renderCards();
@@ -311,119 +333,161 @@ export class GridView extends ItemView {
 		sortBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			const isShown = sortMenu.hasClass('show');
-			container.querySelectorAll('.sort-dropdown-menu.show, .logic-dropdown-menu.show, .tag-dropdown-menu.show').forEach(el => el.removeClass('show'));
+			this.closeAllDropdowns(container);
 			sortMenu.toggleClass('show', !isShown);
 		});
+
+		this.cardCountEl = leftControls.createSpan({ cls: 'card-count-label' });
 
 		// -----------------------------------------------------
 		// [오른쪽] 필터 및 설정 컨트롤
 		// -----------------------------------------------------
 		const rightControls = header.createDiv({ cls: 'header-controls' });
 
-		// 1. 선택된 base 표시 영역
-		const selectedBasesContainer = rightControls.createDiv({ cls: 'selected-tags-container' });
-		selectedBasesContainer.style.display = 'flex';
-		selectedBasesContainer.style.gap = '4px';
-		selectedBasesContainer.style.flexWrap = 'wrap';
+		this.selectedBasesContainerEl = rightControls.createDiv({ cls: 'selected-tags-container' });
 
-		// 2. base 검색 및 초기화
+		// base 검색
 		const searchWrapper = rightControls.createDiv({ cls: 'tag-filter-wrapper' });
 
-		const searchInput = searchWrapper.createEl('input', {
+		this.searchInputEl = searchWrapper.createEl('input', {
 			type: 'text',
 			placeholder: 'base 검색...',
 			cls: 'tag-search-input'
 		});
-		searchInput.style.padding = '4px 8px';
-		searchInput.style.borderRadius = '4px';
-		searchInput.style.border = '1px solid var(--background-modifier-border)';
-		searchInput.style.background = 'var(--background-primary)';
-		searchInput.style.color = 'var(--text-normal)';
-		searchInput.style.width = '120px';
-		searchInput.style.fontSize = '12px';
 
 		const resetBtn = searchWrapper.createDiv({ cls: 'filter-reset-btn' });
 		setIcon(resetBtn, 'search-x');
 		resetBtn.setAttribute('aria-label', '필터 초기화');
 		resetBtn.addEventListener('click', () => {
 			this.selectedBases.clear();
-			searchInput.value = '';
-			this.renderSelectedBases(selectedBasesContainer);
+			this.searchInputEl.value = '';
+			this.renderSelectedBases();
+			this.updateFilterBadge();
 			void this.renderCards();
 		});
 
 		const searchResults = searchWrapper.createDiv({ cls: 'tag-dropdown-menu' });
+		let activeIndex = -1;
 
-		const handleSearch = () => {
-			const query = searchInput.value.toLowerCase().trim();
-			searchResults.empty();
+		const getVisibleItems = (): HTMLElement[] =>
+			Array.from(searchResults.querySelectorAll('.tag-dropdown-item')) as HTMLElement[];
 
-			if (!query) {
-				searchResults.removeClass('show');
-				return;
-			}
-
-			const matches = this.allBases.filter(base =>
-				base.toLowerCase().includes(query) && !this.selectedBases.has(base)
-			);
-
-			if (matches.length > 0) {
-				searchResults.addClass('show');
-				matches.forEach(base => {
-					const item = searchResults.createDiv({ cls: 'tag-dropdown-item' });
-					item.textContent = base;
-					item.addEventListener('click', (e) => {
-						e.stopPropagation();
-						this.addSelectedBase(base, selectedBasesContainer);
-						searchInput.value = '';
-						searchResults.removeClass('show');
-						void this.renderCards();
-					});
-				});
-			} else {
-				searchResults.removeClass('show');
+		const setActiveItem = (index: number) => {
+			getVisibleItems().forEach(el => el.removeClass('keyboard-active'));
+			const items = getVisibleItems();
+			if (index >= 0 && index < items.length) {
+				items[index]!.addClass('keyboard-active');
+				items[index]!.scrollIntoView({ block: 'nearest' });
 			}
 		};
 
-		searchInput.addEventListener('input', handleSearch);
-		searchInput.addEventListener('focus', handleSearch);
+		const buildDropdownItems = (bases: string[]) => {
+			searchResults.empty();
+			activeIndex = -1;
+			if (bases.length === 0) {
+				searchResults.removeClass('show');
+				return;
+			}
+			searchResults.addClass('show');
+			bases.forEach(base => {
+				const item = searchResults.createDiv({ cls: 'tag-dropdown-item' });
+				item.textContent = base;
+				item.addEventListener('click', (e) => {
+					e.stopPropagation();
+					this.addSelectedBase(base);
+					this.searchInputEl.value = '';
+					searchResults.removeClass('show');
+					activeIndex = -1;
+					void this.renderCards();
+				});
+			});
+		};
 
-		// 3. 연산 로직 토글
+		const showAllBases = () => {
+			buildDropdownItems(this.allBases.filter(b => !this.selectedBases.has(b)));
+		};
+
+		const handleSearch = () => {
+			const query = this.searchInputEl.value.toLowerCase().trim();
+			if (!query) {
+				showAllBases();
+				return;
+			}
+			const matches = this.allBases.filter(b =>
+				b.toLowerCase().includes(query) && !this.selectedBases.has(b)
+			);
+			buildDropdownItems(matches);
+		};
+
+		this.searchInputEl.addEventListener('input', handleSearch);
+		this.searchInputEl.addEventListener('focus', () => {
+			if (!this.searchInputEl.value.trim()) showAllBases();
+			else handleSearch();
+		});
+
+		this.searchInputEl.addEventListener('keydown', (e) => {
+			const items = getVisibleItems();
+			const isOpen = searchResults.hasClass('show');
+
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				if (!isOpen) { showAllBases(); return; }
+				activeIndex = items.length === 0 ? -1 : (activeIndex + 1) % items.length;
+				setActiveItem(activeIndex);
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				if (!isOpen) { showAllBases(); return; }
+				activeIndex = items.length === 0 ? -1 : (activeIndex - 1 + items.length) % items.length;
+				setActiveItem(activeIndex);
+			} else if (e.key === 'Enter') {
+				e.preventDefault();
+				if (!isOpen) { showAllBases(); return; }
+				const target = activeIndex >= 0 ? items[activeIndex] : items[0];
+				if (target) target.click();
+			} else if (e.key === 'Escape') {
+				searchResults.removeClass('show');
+				activeIndex = -1;
+				this.searchInputEl.blur();
+			}
+		});
+
+		// 연산 로직 토글 + 필터 뱃지
 		const logicWrapper = rightControls.createDiv({ cls: 'tag-filter-wrapper' });
-		const logicBtn = logicWrapper.createDiv({ cls: 'filter-icon' });
+		const logicBtnContainer = logicWrapper.createDiv({ cls: 'filter-icon-with-badge' });
+		const logicBtn = logicBtnContainer.createDiv({ cls: 'filter-icon' });
 		setIcon(logicBtn, 'filter');
 		logicBtn.setAttribute('aria-label', '필터 연산 설정');
+		this.filterBadgeEl = logicBtnContainer.createSpan({ cls: 'filter-badge' });
+		this.filterBadgeEl.style.display = 'none';
 
 		const logicMenu = logicWrapper.createDiv({ cls: 'logic-dropdown-menu' });
 
-		const orOption = logicMenu.createDiv({ cls: 'tag-dropdown-item' });
-		orOption.textContent = 'OR (하나라도 포함)';
-		orOption.addEventListener('click', (e) => {
+		logicMenu.createDiv({ cls: 'tag-dropdown-item' }).addEventListener('click', (e) => {
 			e.stopPropagation();
 			this.filterLogic = 'OR';
 			logicMenu.removeClass('show');
 			logicBtn.removeClass('active');
 			void this.renderCards();
 		});
+		logicMenu.lastElementChild!.textContent = 'OR (하나라도 포함)';
 
-		const andOption = logicMenu.createDiv({ cls: 'tag-dropdown-item' });
-		andOption.textContent = 'AND (모두 포함)';
-		andOption.addEventListener('click', (e) => {
+		logicMenu.createDiv({ cls: 'tag-dropdown-item' }).addEventListener('click', (e) => {
 			e.stopPropagation();
 			this.filterLogic = 'AND';
 			logicMenu.removeClass('show');
 			logicBtn.addClass('active');
 			void this.renderCards();
 		});
+		logicMenu.lastElementChild!.textContent = 'AND (모두 포함)';
 
 		logicBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			const isShown = logicMenu.hasClass('show');
-			container.querySelectorAll('.sort-dropdown-menu.show, .logic-dropdown-menu.show, .tag-dropdown-menu.show').forEach(el => el.removeClass('show'));
+			this.closeAllDropdowns(container);
 			logicMenu.toggleClass('show', !isShown);
 		});
 
-		// 4. 핀 토글
+		// 핀 토글
 		const pinToggle = rightControls.createDiv({ cls: 'filter-icon' });
 		setIcon(pinToggle, 'pin');
 		pinToggle.setAttribute('aria-label', '고정된 노트만 보기');
@@ -438,30 +502,33 @@ export class GridView extends ItemView {
 			void this.renderCards();
 		});
 
-		// 5. 시작 시 자동 실행 토글
+		// 숨김 패턴 관리
+		const patternBtn = rightControls.createDiv({ cls: 'filter-icon' });
+		setIcon(patternBtn, 'eye-off');
+		patternBtn.setAttribute('aria-label', 'base 숨김 패턴 관리');
+		patternBtn.addEventListener('click', () => {
+			new HiddenPatternModal(this.app, this.plugin, () => void this.renderCards()).open();
+		});
+
+		// 시작 시 자동 실행 토글
 		const autoOpenBtn = rightControls.createDiv({ cls: 'filter-icon' });
 		setIcon(autoOpenBtn, 'zap');
 		autoOpenBtn.setAttribute('aria-label', '시작 시 자동 실행 토글');
 		if (this.plugin.data.opengridview) autoOpenBtn.addClass('active');
-
 		autoOpenBtn.addEventListener('click', async () => {
 			this.plugin.data.opengridview = !this.plugin.data.opengridview;
 			await this.plugin.savePluginData();
-
-			if (this.plugin.data.opengridview) {
-				autoOpenBtn.addClass('active');
-				new Notice('시작할 때 그리드 뷰를 엽니다.');
-			} else {
-				autoOpenBtn.removeClass('active');
-				new Notice('시작할 때 그리드 뷰를 열지 않습니다.');
-			}
+			autoOpenBtn.toggleClass('active', this.plugin.data.opengridview);
+			new Notice(this.plugin.data.opengridview
+				? '시작할 때 그리드 뷰를 엽니다.'
+				: '시작할 때 그리드 뷰를 열지 않습니다.'
+			);
 		});
 
-		// 6. 최대 노트 개수 설정
+		// 최대 노트 개수 설정
 		const maxNotesBtn = rightControls.createDiv({ cls: 'filter-icon' });
 		setIcon(maxNotesBtn, 'settings');
 		maxNotesBtn.setAttribute('aria-label', '최대 노트 개수 설정');
-
 		maxNotesBtn.addEventListener('click', () => {
 			new NumberInputModal(this.app, this.plugin.data.maxNotes, async (num) => {
 				this.plugin.data.maxNotes = num;
@@ -471,22 +538,20 @@ export class GridView extends ItemView {
 			}).open();
 		});
 
-		// 7. 제외 폴더 추가
+		// 제외 폴더 추가
 		const addExcludeBtn = rightControls.createDiv({ cls: 'filter-icon' });
 		setIcon(addExcludeBtn, 'folder-minus');
 		addExcludeBtn.setAttribute('aria-label', '제외 폴더 추가');
-
 		addExcludeBtn.addEventListener('click', () => {
 			new FolderSuggestModal(this.app, this.plugin, async () => {
 				void this.renderCards();
 			}).open();
 		});
 
-		// 8. 제외 폴더 초기화
+		// 제외 폴더 초기화
 		const resetExcludeBtn = rightControls.createDiv({ cls: 'filter-icon' });
 		setIcon(resetExcludeBtn, 'rotate-ccw');
 		resetExcludeBtn.setAttribute('aria-label', '제외 폴더 초기화');
-
 		resetExcludeBtn.addEventListener('click', async () => {
 			if (this.plugin.data.excludedFolders.length === 0) {
 				new Notice('설정된 제외 폴더가 없습니다.');
@@ -498,28 +563,47 @@ export class GridView extends ItemView {
 			new Notice('제외 폴더 설정이 초기화되었습니다.');
 		});
 
-		// 외부 클릭 시 모든 드롭다운 닫기
 		this.registerDomEvent(document, 'click', (e) => {
 			if (!(e.target as HTMLElement).closest('.tag-filter-wrapper')) {
-				container.querySelectorAll('.sort-dropdown-menu.show, .logic-dropdown-menu.show, .tag-dropdown-menu.show').forEach(el => el.removeClass('show'));
+				this.closeAllDropdowns(container);
 			}
 		});
 
-		this.renderSelectedBases(selectedBasesContainer);
+		this.renderSelectedBases();
 	}
 
-	private addSelectedBase(base: string, container: HTMLElement) {
+	private closeAllDropdowns(container: HTMLElement) {
+		container.querySelectorAll('.sort-dropdown-menu.show, .logic-dropdown-menu.show, .tag-dropdown-menu.show')
+			.forEach(el => el.removeClass('show'));
+	}
+
+	private updateFilterBadge() {
+		if (!this.filterBadgeEl) return;
+		const count = this.selectedBases.size;
+		if (count > 0) {
+			this.filterBadgeEl.textContent = String(count);
+			this.filterBadgeEl.style.display = 'flex';
+		} else {
+			this.filterBadgeEl.style.display = 'none';
+		}
+	}
+
+	private addSelectedBase(base: string) {
 		this.selectedBases.add(base);
-		this.renderSelectedBases(container);
+		this.renderSelectedBases();
+		this.updateFilterBadge();
 	}
 
-	private removeSelectedBase(base: string, container: HTMLElement) {
+	private removeSelectedBase(base: string) {
 		this.selectedBases.delete(base);
-		this.renderSelectedBases(container);
+		this.renderSelectedBases();
+		this.updateFilterBadge();
 		void this.renderCards();
 	}
 
-	private renderSelectedBases(container: HTMLElement) {
+	private renderSelectedBases() {
+		const container = this.selectedBasesContainerEl;
+		if (!container) return;
 		container.empty();
 		this.selectedBases.forEach(base => {
 			const pill = container.createDiv({ cls: 'tag-dropdown-item tag-pill' });
@@ -538,7 +622,7 @@ export class GridView extends ItemView {
 
 			closeBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
-				this.removeSelectedBase(base, container);
+				this.removeSelectedBase(base);
 			});
 
 			pill.addEventListener('mouseenter', () => closeBtn.style.opacity = '1');
@@ -550,6 +634,17 @@ export class GridView extends ItemView {
 		this.registerEvent(this.app.vault.on('modify', () => this.debouncedRefresh()));
 		this.registerEvent(this.app.vault.on('create', () => this.debouncedRefresh()));
 		this.registerEvent(this.app.vault.on('delete', () => this.debouncedRefresh()));
+		this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
+			this.updateActiveCardHighlight();
+		}));
+	}
+
+	private updateActiveCardHighlight() {
+		const activeFile = this.app.workspace.getActiveFile();
+		this.gridContainer?.querySelectorAll('.dashboard-card').forEach(card => {
+			const path = card.getAttribute('data-path');
+			card.classList.toggle('card-active', !!activeFile && path === activeFile.path);
+		});
 	}
 
 	private debouncedRefresh() {
@@ -584,21 +679,17 @@ export class GridView extends ItemView {
 		files.forEach(file => {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const bases = new Set<string>();
-
 			const frontmatterBase = cache?.frontmatter?.base;
 			if (Array.isArray(frontmatterBase)) {
-				frontmatterBase.forEach(b => {
-					if (typeof b === 'string') bases.add(b);
-				});
+				frontmatterBase.forEach(b => { if (typeof b === 'string') bases.add(b); });
 			}
-
 			baseMap.set(file.path, bases);
 			bases.forEach(b => allBasesSet.add(b));
 		});
 
 		this.allBases = Array.from(allBasesSet).sort();
 
-		// 3. targetBase 필터 (데이터 소스 레벨)
+		// 3. targetBase 필터
 		if (this.plugin.data.targetBase) {
 			const target = this.plugin.data.targetBase;
 			files = files.filter(file => baseMap.get(file.path)?.has(target));
@@ -609,7 +700,6 @@ export class GridView extends ItemView {
 			files = files.filter(file => {
 				const fileBases = baseMap.get(file.path);
 				if (!fileBases) return false;
-
 				if (this.filterLogic === 'OR') {
 					return [...this.selectedBases].some(base => fileBases.has(base));
 				} else {
@@ -638,9 +728,16 @@ export class GridView extends ItemView {
 
 		const pinnedFiles = files.filter(f => this.plugin.isPinned(f.path)).sort(sortFn);
 		const unpinnedFiles = files.filter(f => !this.plugin.isPinned(f.path)).sort(sortFn);
-
 		const finalFiles = [...pinnedFiles, ...unpinnedFiles].slice(0, this.plugin.data.maxNotes);
 		this.currentFiles = finalFiles;
+
+		// 카드 수 갱신
+		if (this.cardCountEl) {
+			const totalFiles = this.app.vault.getMarkdownFiles().length;
+			this.cardCountEl.textContent = finalFiles.length < totalFiles
+				? `${finalFiles.length} / ${totalFiles}개`
+				: `${finalFiles.length}개`;
+		}
 
 		// 7. Empty State
 		if (finalFiles.length === 0) {
@@ -675,6 +772,8 @@ export class GridView extends ItemView {
 				if (card) singleGrid.appendChild(card);
 			}
 		}
+
+		this.updateActiveCardHighlight();
 	}
 
 	async createCard(file: TFile, index: number): Promise<HTMLElement | null> {
@@ -684,6 +783,12 @@ export class GridView extends ItemView {
 			card.setAttribute('data-path', file.path);
 			card.setAttribute('data-index', index.toString());
 			card.setAttribute('draggable', 'true');
+
+			// staggered fade + slide-up
+			const delay = Math.min(index * 25, 300);
+			card.style.opacity = '0';
+			card.style.transform = 'translateY(8px)';
+			card.style.transition = `opacity 0.2s ease-out ${delay}ms, transform 0.2s ease-out ${delay}ms`;
 
 			const content = await this.app.vault.cachedRead(file);
 			const cleanContent = stripMarkdown(content);
@@ -731,7 +836,6 @@ export class GridView extends ItemView {
 			];
 
 			const colorDropdown = card.createDiv({ cls: 'card-color-dropdown' });
-
 			pastelColors.forEach((color, idx) => {
 				const colorCircle = colorDropdown.createDiv({ cls: 'color-circle' });
 				colorCircle.style.backgroundColor = color;
@@ -739,7 +843,6 @@ export class GridView extends ItemView {
 					colorCircle.addClass('color-circle-clear');
 					colorCircle.setAttribute('aria-label', '색상 제거');
 				}
-
 				colorCircle.addEventListener('click', (e) => {
 					e.stopPropagation();
 					void (async () => {
@@ -760,7 +863,6 @@ export class GridView extends ItemView {
 				e.stopPropagation();
 				colorDropdown.toggleClass('show', !colorDropdown.hasClass('show'));
 			});
-
 			card.addEventListener('click', () => colorDropdown.removeClass('show'));
 
 			// 카드 내용
@@ -775,19 +877,29 @@ export class GridView extends ItemView {
 				cardContent.createEl('p', { text: '내용 없음', cls: 'card-preview card-preview-empty' });
 			}
 
-			// 푸터 (base 값, 날짜)
+			// 푸터 (base 배지, 날짜)
 			const cardFooter = card.createDiv({ cls: 'card-footer' });
 			const basesContainer = cardFooter.createDiv({ cls: 'card-tags' });
 
 			const cache = this.app.metadataCache.getFileCache(file);
 			const frontmatterBase = cache?.frontmatter?.base;
-			const displayBases: string[] = Array.isArray(frontmatterBase)
+			const allBases: string[] = Array.isArray(frontmatterBase)
 				? frontmatterBase.filter((b): b is string => typeof b === 'string')
 				: [];
 
+			const patterns = this.plugin.data.hiddenBasePatterns || [];
+			const displayBases = allBases.filter(b => !isBaseHidden(b, patterns));
+
 			if (displayBases.length > 0) {
 				displayBases.slice(0, 3).forEach(base => {
-					basesContainer.createSpan({ cls: 'card-tag', text: base });
+					const badge = basesContainer.createSpan({ cls: 'card-tag', text: base });
+					badge.addEventListener('click', (e) => {
+						e.stopPropagation();
+						if (!this.selectedBases.has(base)) {
+							this.addSelectedBase(base);
+							void this.renderCards();
+						}
+					});
 				});
 				if (displayBases.length > 3) {
 					basesContainer.createSpan({ cls: 'card-tag-more', text: `+${displayBases.length - 3}` });
@@ -797,11 +909,12 @@ export class GridView extends ItemView {
 			const dateSpan = cardFooter.createSpan({ cls: 'card-date' });
 			dateSpan.createSpan({ text: formatDate(file.stat.mtime) });
 
-			// 클릭 이벤트
+			// 파일 열기 (배지 클릭은 별도 처리)
 			card.addEventListener('click', (e) => {
 				if ((e.target as HTMLElement).closest('.card-pin-btn') ||
 					(e.target as HTMLElement).closest('.card-color-btn') ||
-					(e.target as HTMLElement).closest('.card-color-dropdown')) return;
+					(e.target as HTMLElement).closest('.card-color-dropdown') ||
+					(e.target as HTMLElement).closest('.card-tag')) return;
 				const leaf = this.app.workspace.getLeaf('tab');
 				void leaf.openFile(file);
 			});
@@ -813,6 +926,11 @@ export class GridView extends ItemView {
 			card.addEventListener('dragenter', (e) => this.handleDragEnter(e, card));
 			card.addEventListener('dragleave', (e) => this.handleDragLeave(e, card));
 			card.addEventListener('drop', (e) => void this.handleDrop(e, card));
+
+			requestAnimationFrame(() => {
+				card.style.opacity = '1';
+				card.style.transform = 'translateY(0)';
+			});
 
 			return card;
 		} catch (error) {
@@ -882,6 +1000,107 @@ export class GridView extends ItemView {
 // 5. HELPER MODALS
 // ------------------------------------------------------------------
 
+class HiddenPatternModal extends Modal {
+	private plugin: GridViewPlugin;
+	private onSave: () => void;
+
+	constructor(app: App, plugin: GridViewPlugin, onSave: () => void) {
+		super(app);
+		this.plugin = plugin;
+		this.onSave = onSave;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl('h3', { text: 'base 숨김 패턴 관리' });
+		contentEl.createEl('p', {
+			text: '카드 배지에서 숨길 base 값의 정규식 패턴을 관리합니다. 필터 기능에는 영향을 주지 않습니다.',
+			cls: 'setting-item-description'
+		});
+
+		const listEl = contentEl.createDiv({ cls: 'hidden-pattern-list' });
+		this.renderPatternList(listEl);
+
+		let inputValue = '';
+
+		const addSetting = new Setting(contentEl)
+			.setName('새 패턴 추가')
+			.addText(text => {
+				text.setPlaceholder('예: ^\\d{4}년$');
+				text.onChange(val => { inputValue = val; });
+				text.inputEl.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter') tryAdd();
+				});
+			})
+			.addButton(btn => {
+				btn.setButtonText('추가').setCta().onClick(tryAdd);
+				return btn;
+			});
+
+		const validationEl = contentEl.createEl('p');
+		validationEl.style.display = 'none';
+		validationEl.style.color = 'var(--text-error)';
+		validationEl.style.fontSize = '12px';
+		validationEl.style.margin = '4px 0 0 0';
+
+		const tryAdd = async () => {
+			const trimmed = inputValue.trim();
+			if (!trimmed) return;
+
+			try {
+				new RegExp(trimmed);
+			} catch {
+				validationEl.textContent = '유효하지 않은 정규식입니다.';
+				validationEl.style.display = 'block';
+				return;
+			}
+
+			if (this.plugin.data.hiddenBasePatterns.includes(trimmed)) {
+				validationEl.textContent = '이미 존재하는 패턴입니다.';
+				validationEl.style.display = 'block';
+				return;
+			}
+
+			validationEl.style.display = 'none';
+			this.plugin.data.hiddenBasePatterns.push(trimmed);
+			await this.plugin.savePluginData();
+			this.onSave();
+			inputValue = '';
+			// 입력창 초기화
+			const inputEl = addSetting.controlEl.querySelector('input');
+			if (inputEl) (inputEl as HTMLInputElement).value = '';
+			this.renderPatternList(listEl);
+		};
+	}
+
+	private renderPatternList(listEl: HTMLElement) {
+		listEl.empty();
+		const patterns = this.plugin.data.hiddenBasePatterns;
+
+		if (patterns.length === 0) {
+			listEl.createEl('p', { text: '등록된 패턴이 없습니다.', cls: 'setting-item-description' });
+			return;
+		}
+
+		patterns.forEach((pattern, idx) => {
+			new Setting(listEl)
+				.setName(pattern)
+				.addButton(btn => btn
+					.setIcon('trash')
+					.setTooltip('삭제')
+					.onClick(async () => {
+						this.plugin.data.hiddenBasePatterns.splice(idx, 1);
+						await this.plugin.savePluginData();
+						this.onSave();
+						this.renderPatternList(listEl);
+					})
+				);
+		});
+	}
+
+	onClose() { this.contentEl.empty(); }
+}
+
 class NumberInputModal extends Modal {
 	result: number;
 	onSubmit: (result: number) => void;
@@ -895,35 +1114,27 @@ class NumberInputModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.createEl('h3', { text: '최대 노트 개수 설정' });
-
 		new Setting(contentEl)
 			.setName('표시할 최대 노트 수')
 			.setDesc('숫자를 입력하세요.')
-			.addText((text) =>
-				text.setValue(String(this.result)).onChange((value) => {
+			.addText(text =>
+				text.setValue(String(this.result)).onChange(value => {
 					this.result = parseInt(value);
 				})
 			);
-
-		new Setting(contentEl).addButton((btn) =>
-			btn
-				.setButtonText('저장')
-				.setCta()
-				.onClick(() => {
-					if (!isNaN(this.result) && this.result > 0) {
-						this.onSubmit(this.result);
-						this.close();
-					} else {
-						new Notice('올바른 숫자를 입력해주세요.');
-					}
-				})
+		new Setting(contentEl).addButton(btn =>
+			btn.setButtonText('저장').setCta().onClick(() => {
+				if (!isNaN(this.result) && this.result > 0) {
+					this.onSubmit(this.result);
+					this.close();
+				} else {
+					new Notice('올바른 숫자를 입력해주세요.');
+				}
+			})
 		);
 	}
 
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
 
 class FolderSuggestModal extends FuzzySuggestModal<TFolder> {
@@ -938,20 +1149,14 @@ class FolderSuggestModal extends FuzzySuggestModal<TFolder> {
 	}
 
 	getItems(): TFolder[] {
-		const allFiles = this.app.vault.getAllLoadedFiles();
-		const folders = allFiles.filter((f): f is TFolder => f instanceof TFolder);
-
-		return folders.filter(f =>
-			f.path !== '/' &&
-			!this.plugin.data.excludedFolders.includes(f.path)
-		);
+		return this.app.vault.getAllLoadedFiles()
+			.filter((f): f is TFolder => f instanceof TFolder)
+			.filter(f => f.path !== '/' && !this.plugin.data.excludedFolders.includes(f.path));
 	}
 
-	getItemText(item: TFolder): string {
-		return item.path;
-	}
+	getItemText(item: TFolder): string { return item.path; }
 
-	async onChooseItem(item: TFolder, evt: MouseEvent | KeyboardEvent) {
+	async onChooseItem(item: TFolder) {
 		this.plugin.data.excludedFolders.push(item.path);
 		await this.plugin.savePluginData();
 		new Notice(`"${item.path}" 폴더가 제외 목록에 추가되었습니다.`);

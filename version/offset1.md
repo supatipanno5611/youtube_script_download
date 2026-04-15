@@ -1,3 +1,4 @@
+```ts
 import { Plugin, MarkdownView } from 'obsidian';
 
 export default class DiagPlugin extends Plugin {
@@ -32,3 +33,4 @@ export default class DiagPlugin extends Plugin {
         });
     }
 }
+```

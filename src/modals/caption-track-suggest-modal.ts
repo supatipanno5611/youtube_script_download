@@ -14,6 +14,7 @@ export function chooseCaptionTrack(
 
 class CaptionTrackSuggestModal extends SuggestModal<CaptionTrack> {
 	private selected = false;
+	private resolved = false;
 
 	constructor(
 		app: App,
@@ -37,13 +38,21 @@ class CaptionTrackSuggestModal extends SuggestModal<CaptionTrack> {
 
 	onChooseSuggestion(track: CaptionTrack): void {
 		this.selected = true;
-		this.resolveValue(track);
+		this.resolveOnce(track);
 	}
 
 	onClose(): void {
 		super.onClose();
-		if (!this.selected) {
-			this.resolveValue(null);
-		}
+		window.setTimeout(() => {
+			if (!this.selected) {
+				this.resolveOnce(null);
+			}
+		}, 0);
+	}
+
+	private resolveOnce(track: CaptionTrack | null): void {
+		if (this.resolved) return;
+		this.resolved = true;
+		this.resolveValue(track);
 	}
 }

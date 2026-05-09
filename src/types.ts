@@ -1,7 +1,3 @@
-export interface PluginSettings {
-	outputFolder: string;
-}
-
 export interface CaptionTrack {
 	baseUrl: string;
 	label: string;

@@ -1,85 +1,81 @@
 import type { TranscriptLine } from "../types";
 
-const TEXT_TAG_PATTERN =
-	/<text\s+start="([^"]+)"\s+dur="([^"]+)"[^>]*>([\s\S]*?)<\/text>/g;
-const P_TAG_PATTERN = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
-
 export function parseCaptionXml(xmlContent: string): TranscriptLine[] {
-	const textTagLines = parseTextTagLines(xmlContent);
+	const document = new DOMParser().parseFromString(xmlContent, "text/xml");
+	if (document.getElementsByTagName("parsererror").length > 0) {
+		return [];
+	}
+
+	const textTagLines = parseTextTagLines(document);
 	if (textTagLines.length > 0) {
 		return textTagLines;
 	}
 
-	return parseParagraphTagLines(xmlContent);
+	return parseParagraphTagLines(document);
 }
 
-function parseTextTagLines(xmlContent: string): TranscriptLine[] {
+function parseTextTagLines(document: Document): TranscriptLine[] {
+	const elements = document.getElementsByTagName("text");
 	const lines: TranscriptLine[] = [];
 
-	for (const match of xmlContent.matchAll(TEXT_TAG_PATTERN)) {
-		const start = match[1];
-		const duration = match[2];
-		const rawText = match[3];
-		if (start === undefined || duration === undefined || rawText === undefined) {
-			continue;
-		}
+	for (let index = 0; index < elements.length; index++) {
+		const element = elements.item(index);
+		if (element === null) continue;
 
-		const text = cleanCaptionText(rawText);
+		const offset = parseSeconds(element.getAttribute("start"));
+		const duration = parseSeconds(element.getAttribute("dur"));
+		if (offset === null || duration === null) continue;
+
+		const text = cleanCaptionText(element.textContent ?? "");
 		if (text.length === 0) continue;
 
-		lines.push({
-			text,
-			offset: Math.round(Number.parseFloat(start) * 1000),
-			duration: Math.round(Number.parseFloat(duration) * 1000),
-		});
+		lines.push({ text, offset, duration });
 	}
 
 	return lines;
 }
 
-function parseParagraphTagLines(xmlContent: string): TranscriptLine[] {
+function parseParagraphTagLines(document: Document): TranscriptLine[] {
+	const elements = document.getElementsByTagName("p");
 	const lines: TranscriptLine[] = [];
 
-	for (const match of xmlContent.matchAll(P_TAG_PATTERN)) {
-		const start = match[1];
-		const duration = match[2];
-		const rawText = match[3];
-		if (start === undefined || duration === undefined || rawText === undefined) {
-			continue;
-		}
+	for (let index = 0; index < elements.length; index++) {
+		const element = elements.item(index);
+		if (element === null) continue;
 
-		const text = cleanCaptionText(rawText);
+		const offset = parseMilliseconds(element.getAttribute("t"));
+		const durationValue = element.getAttribute("d");
+		const duration =
+			durationValue === null ? 0 : parseMilliseconds(durationValue);
+		if (offset === null || duration === null) continue;
+
+		const text = cleanCaptionText(element.textContent ?? "");
 		if (text.length === 0) continue;
 
-		lines.push({
-			text,
-			offset: Number.parseInt(start, 10),
-			duration: Number.parseInt(duration, 10),
-		});
+		lines.push({ text, offset, duration });
 	}
 
 	return lines;
+}
+
+function parseSeconds(value: string | null): number | null {
+	if (value === null) return null;
+
+	const parsed = Number.parseFloat(value);
+	if (!Number.isFinite(parsed) || parsed < 0) return null;
+
+	return Math.round(parsed * 1000);
+}
+
+function parseMilliseconds(value: string | null): number | null {
+	if (value === null) return null;
+
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isFinite(parsed) || parsed < 0) return null;
+
+	return parsed;
 }
 
 function cleanCaptionText(text: string): string {
-	return decodeHtmlEntities(text.replace(/<[^>]+>/g, ""))
-		.replace(/\n/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-}
-
-function decodeHtmlEntities(text: string): string {
-	return text
-		.replace(/&amp;/g, "&")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&apos;/g, "'")
-		.replace(/&#(\d+);/g, (_, code: string) =>
-			String.fromCharCode(Number.parseInt(code, 10)),
-		)
-		.replace(/&#x([a-fA-F0-9]+);/g, (_, code: string) =>
-			String.fromCharCode(Number.parseInt(code, 16)),
-		);
+	return text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
 }

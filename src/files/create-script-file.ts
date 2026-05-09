@@ -3,12 +3,13 @@ import { App, normalizePath, TFile, TFolder } from "obsidian";
 export async function createScriptFile(
 	app: App,
 	outputFolder: string,
+	videoTitle: string,
 	content: string,
 ): Promise<TFile> {
 	const folderPath = normalizeFolderPath(outputFolder);
 	await ensureFolder(app, folderPath);
 
-	const filePath = getAvailableScriptPath(app, folderPath);
+	const filePath = getAvailableScriptPath(app, folderPath, videoTitle);
 	return app.vault.create(filePath, content);
 }
 
@@ -40,11 +41,17 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
 	}
 }
 
-function getAvailableScriptPath(app: App, folderPath: string): string {
+function getAvailableScriptPath(
+	app: App,
+	folderPath: string,
+	videoTitle: string,
+): string {
+	const baseName = sanitizeFileName(videoTitle) || "script";
 	let index = 0;
 
 	while (true) {
-		const fileName = index === 0 ? "script.md" : `script (${index}).md`;
+		const fileName =
+			index === 0 ? `${baseName}.md` : `${baseName} (${index}).md`;
 		const filePath =
 			folderPath === "" ? fileName : `${folderPath}/${fileName}`;
 
@@ -54,4 +61,11 @@ function getAvailableScriptPath(app: App, folderPath: string): string {
 
 		index += 1;
 	}
+}
+
+function sanitizeFileName(fileName: string): string {
+	return fileName
+		.replace(/[\\/:*?"<>|]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 }

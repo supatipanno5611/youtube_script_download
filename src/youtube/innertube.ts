@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { RequestUrlResponse, requestUrl } from "obsidian";
 
 const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const INNERTUBE_PLAYER_URL = `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`;
@@ -10,6 +10,9 @@ export interface PlayerData {
 		playerCaptionsTracklistRenderer?: {
 			captionTracks?: RawCaptionTrack[];
 		};
+	};
+	videoDetails?: {
+		title?: string;
 	};
 	playabilityStatus?: {
 		status?: string;
@@ -30,27 +33,37 @@ export interface RawCaptionTrack {
 }
 
 export async function fetchPlayerData(videoId: string): Promise<PlayerData> {
-	const response = await requestUrl({
-		url: INNERTUBE_PLAYER_URL,
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"User-Agent": IOS_USER_AGENT,
-		},
-		body: JSON.stringify({
-			context: {
-				client: {
-					clientName: "IOS",
-					clientVersion: "20.10.38",
-					hl: "en",
-					gl: "US",
-				},
+	let response: RequestUrlResponse;
+	try {
+		response = await requestUrl({
+			url: INNERTUBE_PLAYER_URL,
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"User-Agent": IOS_USER_AGENT,
 			},
-			videoId,
-		}),
-	});
+			body: JSON.stringify({
+				context: {
+					client: {
+						clientName: "IOS",
+						clientVersion: "20.10.38",
+						hl: "en",
+						gl: "US",
+					},
+				},
+				videoId,
+			}),
+		});
+	} catch {
+		throw new Error("YouTube transcript API request failed");
+	}
 
-	const data = JSON.parse(response.text) as PlayerData;
+	let data: PlayerData;
+	try {
+		data = JSON.parse(response.text) as PlayerData;
+	} catch {
+		throw new Error("YouTube transcript API returned an unreadable response");
+	}
 	checkPlayability(data);
 	return data;
 }

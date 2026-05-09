@@ -1,9 +1,7 @@
-import { Notice, Plugin } from "obsidian";
+import { Editor, Notice, Plugin } from "obsidian";
 
-import { createScriptFile } from "./files/create-script-file";
 import { chooseCaptionTrack } from "./modals/caption-track-suggest-modal";
 import { promptForYouTubeUrl } from "./modals/url-prompt-modal";
-import { loadPluginSettings } from "./settings";
 import { formatScript } from "./transcript/format-script";
 import { parseCaptionXml } from "./transcript/parse-caption-xml";
 import { downloadCaptionXml, getCaptionTracks } from "./youtube/captions";
@@ -14,14 +12,14 @@ export default class StrictPlugin extends Plugin {
 	onload(): void {
 		this.addCommand({
 			id: "import-youtube-script",
-			name: "Import YouTube script",
-			callback: () => {
-				void this.importYouTubeScript();
+			name: "Insert YouTube script",
+			editorCallback: (editor) => {
+				void this.importYouTubeScript(editor);
 			},
 		});
 	}
 
-	private async importYouTubeScript(): Promise<void> {
+	private async importYouTubeScript(editor: Editor): Promise<void> {
 		const url = await promptForYouTubeUrl(this.app);
 		if (url === null) return;
 
@@ -32,7 +30,6 @@ export default class StrictPlugin extends Plugin {
 		}
 
 		try {
-			const settings = await loadPluginSettings(this);
 			const playerData = await fetchPlayerData(videoId);
 			const tracks = getCaptionTracks(playerData);
 
@@ -52,17 +49,12 @@ export default class StrictPlugin extends Plugin {
 			}
 
 			const markdown = formatScript(lines);
-			const file = await createScriptFile(
-				this.app,
-				settings.outputFolder,
-				markdown,
-			);
-			await this.app.workspace.getLeaf(false).openFile(file);
-			new Notice(`Created ${file.path}`);
+			editor.replaceSelection(markdown);
+			new Notice("Inserted YouTube script.");
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : "Unknown error";
-			new Notice(`Failed to import YouTube script: ${message}`);
+			new Notice(`Failed to insert YouTube script: ${message}`);
 		}
 	}
 }

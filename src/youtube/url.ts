@@ -4,6 +4,7 @@ const YOUTUBE_HOSTS = [
 	"www.youtube.com",
 	"m.youtube.com",
 	"mobile.youtube.com",
+	"music.youtube.com",
 ];
 const SHORT_HOSTS = ["youtu.be", "www.youtu.be"];
 
@@ -32,6 +33,18 @@ export function extractVideoIdFromUrl(input: string): string | null {
 	const shortsPrefix = "/shorts/";
 	if (parsed.pathname.indexOf(shortsPrefix) === 0) {
 		const videoId = parsed.pathname.slice(shortsPrefix.length).split("/")[0];
+		return isVideoId(videoId) ? videoId : null;
+	}
+
+	const embedPrefix = "/embed/";
+	if (parsed.pathname.indexOf(embedPrefix) === 0) {
+		const videoId = parsed.pathname.slice(embedPrefix.length).split("/")[0];
+		return isVideoId(videoId) ? videoId : null;
+	}
+
+	const livePrefix = "/live/";
+	if (parsed.pathname.indexOf(livePrefix) === 0) {
+		const videoId = parsed.pathname.slice(livePrefix.length).split("/")[0];
 		return isVideoId(videoId) ? videoId : null;
 	}
 

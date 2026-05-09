@@ -1,4 +1,4 @@
-import { App, Modal } from "obsidian";
+import { App, ButtonComponent, Modal, TextComponent } from "obsidian";
 
 export function promptForYouTubeUrl(app: App): Promise<string | null> {
 	return new Promise((resolve) => {
@@ -8,7 +8,7 @@ export function promptForYouTubeUrl(app: App): Promise<string | null> {
 }
 
 class UrlPromptModal extends Modal {
-	private inputEl!: HTMLInputElement;
+	private value = "";
 	private resolved = false;
 
 	constructor(
@@ -20,23 +20,28 @@ class UrlPromptModal extends Modal {
 
 	onOpen(): void {
 		this.titleEl.setText("YouTube URL");
-		this.inputEl = this.contentEl.createEl("input", {
-			type: "text",
-			placeholder: "https://www.youtube.com/watch?v=...",
+
+		const textInput = new TextComponent(this.contentEl);
+		textInput.inputEl.addClass("yt-script-url-input");
+		textInput.inputEl.placeholder = "https://www.youtube.com/watch?v=...";
+		textInput.onChange((value) => {
+			this.value = value;
 		});
-		this.inputEl.addClass("yt-script-url-input");
-		this.inputEl.addEventListener("keydown", (event) => {
+		textInput.inputEl.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
 				event.preventDefault();
 				this.submit();
 			}
 		});
 
-		const buttonEl = this.contentEl.createEl("button", {
-			text: "Import",
-		});
-		buttonEl.addEventListener("click", () => this.submit());
-		this.inputEl.focus();
+		const buttonContainerEl = this.contentEl.createDiv();
+		buttonContainerEl.addClass("modal-button-container");
+
+		const submitButton = new ButtonComponent(buttonContainerEl);
+		submitButton.buttonEl.addClass("mod-cta");
+		submitButton.setButtonText("Import").onClick(() => this.submit());
+
+		textInput.inputEl.focus();
 	}
 
 	onClose(): void {
@@ -48,7 +53,7 @@ class UrlPromptModal extends Modal {
 
 	private submit(): void {
 		this.resolved = true;
-		this.resolveValue(this.inputEl.value.trim());
+		this.resolveValue(this.value.trim());
 		this.close();
 	}
 }

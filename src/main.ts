@@ -1,87 +1,68 @@
-import { Editor, EditorChange, EditorSelection, Plugin } from "obsidian";
+import { Notice, Plugin } from "obsidian";
 
-const TIMESTAMP_RE = /^(\u25b6\s+\d+:\d{2}(?::\d{2})?)\s*(.*)$/;
+import { createScriptFile } from "./files/create-script-file";
+import { chooseCaptionTrack } from "./modals/caption-track-suggest-modal";
+import { promptForYouTubeUrl } from "./modals/url-prompt-modal";
+import { loadPluginSettings } from "./settings";
+import { formatScript } from "./transcript/format-script";
+import { parseCaptionXml } from "./transcript/parse-caption-xml";
+import { downloadCaptionXml, getCaptionTracks } from "./youtube/captions";
+import { fetchPlayerData } from "./youtube/innertube";
+import { extractVideoIdFromUrl } from "./youtube/url";
 
-type GetLine = (line: number) => string;
-
-interface LineRange {
-	startLine: number;
-	endLine: number;
-}
-
-function getSelectedLineRange(selection: EditorSelection): LineRange {
-	return {
-		startLine: Math.min(selection.anchor.line, selection.head.line),
-		endLine: Math.max(selection.anchor.line, selection.head.line),
-	};
-}
-
-function getLinesInRange(range: LineRange, getLine: GetLine): string[] {
-	const lines: string[] = [];
-
-	for (let line = range.startLine; line <= range.endLine; line++) {
-		lines.push(getLine(line));
-	}
-
-	return lines;
-}
-
-export function mergeTimestampLines(lines: string[]): string {
-	const firstLine = lines[0];
-	const firstMatch = firstLine?.match(TIMESTAMP_RE);
-	const timestamp = firstMatch?.[1];
-	const textParts = lines
-		.map((line) => {
-			const match = line.match(TIMESTAMP_RE);
-			return (match?.[2] ?? line).trim();
-		})
-		.filter((text) => text.length > 0);
-
-	const mergedText = textParts.join(" ");
-	return timestamp ? `${timestamp} ${mergedText}` : mergedText;
-}
-
-export function buildTimestampMergeChanges(
-	selections: EditorSelection[],
-	getLine: GetLine,
-): EditorChange[] {
-	const changes: EditorChange[] = [];
-
-	for (const selection of selections) {
-		const range = getSelectedLineRange(selection);
-
-		if (range.startLine === range.endLine) {
-			continue;
-		}
-
-		const lines = getLinesInRange(range, getLine);
-
-		changes.push({
-			from: { line: range.startLine, ch: 0 },
-			to: { line: range.endLine, ch: getLine(range.endLine).length },
-			text: mergeTimestampLines(lines),
-		});
-	}
-
-	return changes;
-}
-
-export default class TimestampMergerPlugin extends Plugin {
-	async onload(): Promise<void> {
+export default class StrictPlugin extends Plugin {
+	onload(): void {
 		this.addCommand({
-			id: "merge-timestamp-lines",
-			name: "Merge timestamp lines",
-			editorCallback: (editor: Editor) => {
-				const changes = buildTimestampMergeChanges(editor.listSelections(), (line) =>
-					editor.getLine(line),
-				);
-
-				if (changes.length === 0) {
-					return;
-				}
-
-				editor.transaction({ changes });
+			id: "import-youtube-script",
+			name: "Import YouTube script",
+			callback: () => {
+				void this.importYouTubeScript();
 			},
 		});
+	}
+
+	private async importYouTubeScript(): Promise<void> {
+		const url = await promptForYouTubeUrl(this.app);
+		if (url === null) return;
+
+		const videoId = extractVideoIdFromUrl(url);
+		if (videoId === null) {
+			new Notice("Enter a valid YouTube URL.");
+			return;
+		}
+
+		try {
+			const settings = await loadPluginSettings(this);
+			const playerData = await fetchPlayerData(videoId);
+			const tracks = getCaptionTracks(playerData);
+
+			if (tracks.length === 0) {
+				new Notice("No captions are available for this video.");
+				return;
+			}
+
+			const track = await chooseCaptionTrack(this.app, tracks);
+			if (track === null) return;
+
+			const captionXml = await downloadCaptionXml(track);
+			const lines = parseCaptionXml(captionXml);
+			if (lines.length === 0) {
+				new Notice("The selected caption track is empty.");
+				return;
+			}
+
+			const markdown = formatScript(lines);
+			const file = await createScriptFile(
+				this.app,
+				settings.outputFolder,
+				markdown,
+			);
+			await this.app.workspace.getLeaf(false).openFile(file);
+			new Notice(`Created ${file.path}`);
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Unknown error";
+			new Notice(`Failed to import YouTube script: ${message}`);
+		}
 	}
 }

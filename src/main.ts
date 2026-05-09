@@ -11,8 +11,8 @@ import { extractVideoIdFromUrl } from "./youtube/url";
 export default class StrictPlugin extends Plugin {
 	onload(): void {
 		this.addCommand({
-			id: "import-youtube-script",
-			name: "Insert YouTube script",
+			id: "insert-youtube-script",
+			name: "유튜브 자막 스크립트 삽입",
 			editorCallback: (editor) => {
 				void this.importYouTubeScript(editor);
 			},

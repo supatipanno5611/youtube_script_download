@@ -13,6 +13,7 @@ export default class StrictPlugin extends Plugin {
 		this.addCommand({
 			id: "insert-youtube-script",
 			name: "유튜브 자막 스크립트 삽입",
+			icon: "lucide-youtube",
 			editorCallback: (editor) => {
 				void this.importYouTubeScript(editor);
 			},
